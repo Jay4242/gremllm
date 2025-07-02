@@ -78,12 +78,15 @@ Rules:
             result = response.json()
             content = result["choices"][0]["message"]["content"]
 
+            # Post-process the content to remove thinking tags and blank lines
+            processed_content = self._post_process_response(content)
+
             # Try to parse as JSON first
             try:
-                return json.loads(content)
+                return json.loads(processed_content)
             except json.JSONDecodeError:
                 # If not JSON, wrap the content as code
-                return {"code": content}
+                return {"code": processed_content}
 
         except Exception as e:
             return {"code": f"# Error calling OpenAI: {str(e)}\\nresult = None"}
@@ -136,3 +139,17 @@ result = _context.get('value', 0)
 ```
 """
         return prompt.strip()
+
+    def _post_process_response(self, response_content: str) -> str:
+        """
+        Removes text within <think></think> tags and any blank line immediately
+        following a </think> tag.
+        """
+        import re
+        # Remove <think>...</think> blocks
+        cleaned_content = re.sub(r"<think>.*?</think>", "", response_content, flags=re.DOTALL)
+        # Remove blank lines immediately following </think> (if any were left after previous step)
+        # This regex looks for a newline followed by zero or more whitespace characters and then another newline
+        # which would signify a blank line. It's applied after removing the think tags.
+        cleaned_content = re.sub(r"\n\s*\n", "\n", cleaned_content)
+        return cleaned_content.strip()
